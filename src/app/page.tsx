@@ -1,12 +1,14 @@
 'use client';
 
-import { fetchGroups } from '@/api';
+import { Group, fetchGroups } from '@/api';
+import { Filters } from '@/components/filters/Filters';
 import { List } from '@/components/list/List';
+import { getColorsByGroups } from '@/state/FilterSlice';
 import { getAll, setStatus } from '@/state/ListSlice';
 import { changeModal } from '@/state/ModalSlice';
 import { RootState } from '@/state/store';
 import {
-  Group,
+  Group as UIGroup,
   ModalPage,
   ModalRoot,
   Panel,
@@ -17,7 +19,7 @@ import {
   SplitLayout,
   View,
 } from '@vkontakte/vkui';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 export default function Home() {
@@ -25,6 +27,11 @@ export default function Home() {
     (state: RootState) => state.modal.activeModal,
   );
   const { groups, status } = useSelector((state: RootState) => state.groups);
+  const {
+    closed: closedFilter,
+    avatarColor: avatarColorFilter,
+    hasFriends: hasFriendsFilter,
+  } = useSelector((state: RootState) => state.filters);
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -33,6 +40,7 @@ export default function Home() {
         const data = await fetchGroups();
         if (data.data) {
           dispatch(getAll(data.data));
+          dispatch(getColorsByGroups(data.data));
           dispatch(setStatus('done'));
         } else {
           dispatch(setStatus('error'));
@@ -54,25 +62,62 @@ export default function Home() {
           id={group.id.toString()}
           onClose={() => dispatch(changeModal(null))}
         >
-          <Group>
+          <UIGroup>
             {group.friends?.map((friend) => (
               <SimpleCell
                 key={null}
               >{`${friend.first_name} ${friend.last_name}`}</SimpleCell>
             ))}
-          </Group>
+          </UIGroup>
         </ModalPage>
       ))}
     </ModalRoot>
   );
 
+  const filteredGroups = useMemo(
+    () =>
+      groups.filter((group: Group) => {
+        if (
+          closedFilter.currentValue !== null &&
+          closedFilter.currentValue !== group.closed
+        ) {
+          return false;
+        }
+        if (
+          avatarColorFilter.currentValue !== null &&
+          avatarColorFilter.currentValue !== group.avatar_color
+        ) {
+          return false;
+        }
+        if (
+          hasFriendsFilter.currentValue !== null &&
+          hasFriendsFilter.currentValue !== Boolean(group.friends)
+        ) {
+          return false;
+        }
+
+        return true;
+      }),
+    [
+      avatarColorFilter.currentValue,
+      closedFilter.currentValue,
+      groups,
+      hasFriendsFilter.currentValue,
+    ],
+  );
+
   return (
     <SplitLayout modal={modalRoot}>
+      <Filters />
       <SplitCol autoSpaced>
+        <Spacing size={24} />
         <View activePanel="main">
           <Panel id="main">
-            <Spacing size={24} />
-            {status === 'loading' ? <PanelSpinner /> : <List groups={groups} />}
+            {status === 'loading' ? (
+              <PanelSpinner />
+            ) : (
+              <List groups={filteredGroups} />
+            )}
           </Panel>
         </View>
       </SplitCol>
